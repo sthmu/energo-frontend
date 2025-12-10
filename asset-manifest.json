@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/energo-frontend/static/css/main.b287d42f.css",
-    "main.js": "/energo-frontend/static/js/main.83dd1f6c.js",
+    "main.css": "/energo-frontend/static/css/main.eccfe8c4.css",
+    "main.js": "/energo-frontend/static/js/main.ff1627ed.js",
     "static/js/453.06b7c348.chunk.js": "/energo-frontend/static/js/453.06b7c348.chunk.js",
     "index.html": "/energo-frontend/index.html",
-    "main.b287d42f.css.map": "/energo-frontend/static/css/main.b287d42f.css.map",
-    "main.83dd1f6c.js.map": "/energo-frontend/static/js/main.83dd1f6c.js.map",
+    "main.eccfe8c4.css.map": "/energo-frontend/static/css/main.eccfe8c4.css.map",
+    "main.ff1627ed.js.map": "/energo-frontend/static/js/main.ff1627ed.js.map",
     "453.06b7c348.chunk.js.map": "/energo-frontend/static/js/453.06b7c348.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.b287d42f.css",
-    "static/js/main.83dd1f6c.js"
+    "static/css/main.eccfe8c4.css",
+    "static/js/main.ff1627ed.js"
   ]
 }
