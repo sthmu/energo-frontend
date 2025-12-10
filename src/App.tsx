@@ -3,8 +3,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 interface PowerReading {
   time: string;
   voltage: number;
-  current: number;
-  power: number;
+  charge: number;
+}
+
+interface LatestReading {
+  time: string;
+  voltage: number;
+  charge: number;
 }
 
 interface PowerData {
@@ -18,9 +23,27 @@ interface EnergyData {
   totalEnergyKWh: number;
 }
 
+interface StatsData {
+  timeRange: string;
+  voltage: {
+    min: number;
+    max: number;
+    avg: number;
+  };
+  charge: {
+    min: number;
+    max: number;
+    avg: number;
+  };
+}
+
 interface Statistics {
   avgVoltage: number;
-  avgCurrent: number;
+  minVoltage: number;
+  maxVoltage: number;
+  avgCharge: number;
+  minCharge: number;
+  maxCharge: number;
   totalEnergy: number;
 }
 
@@ -72,42 +95,73 @@ function App() {
   const fetchPowerData = useCallback(async () => {
     try {
       setError(null);
-      const timeRangeParam = getTimeRangeString();
       
-      // Fetch power readings
-      const powerResponse = await fetch(`${API_BASE_URL}/api/power?timeRange=${timeRangeParam}`);
-      if (!powerResponse.ok) {
-        throw new Error('Failed to fetch power data');
-      }
-      const powerData: PowerData = await powerResponse.json();
+      let energyData: EnergyData;
+      let statsData: StatsData;
       
-      // Fetch energy consumption
-      const energyResponse = await fetch(`${API_BASE_URL}/api/power/energy?timeRange=${timeRangeParam}`);
-      if (!energyResponse.ok) {
-        throw new Error('Failed to fetch energy data');
-      }
-      const energyData: EnergyData = await energyResponse.json();
-      
-      // Calculate statistics
-      if (powerData.data && powerData.data.length > 0) {
-        setLatestReading(powerData.data[powerData.data.length - 1]);
+      // Use custom range if specified
+      if (useCustomRange && startDateTime && endDateTime) {
+        const fromISO = new Date(startDateTime).toISOString();
+        const toISO = new Date(endDateTime).toISOString();
         
-        const avgVoltage = powerData.data.reduce((sum, r) => sum + r.voltage, 0) / powerData.data.length;
-        const avgCurrent = powerData.data.reduce((sum, r) => sum + r.current, 0) / powerData.data.length;
+        // Fetch energy with custom range
+        const energyResponse = await fetch(`${API_BASE_URL}/api/power/energy/range?from=${fromISO}&to=${toISO}`);
+        if (!energyResponse.ok) {
+          throw new Error('Failed to fetch energy data');
+        }
+        energyData = await energyResponse.json();
         
-        setStatistics({
-          avgVoltage: Math.round(avgVoltage * 100) / 100,
-          avgCurrent: Math.round(avgCurrent * 100) / 100,
-          totalEnergy: Math.round(energyData.totalEnergyKWh * 1000) / 1000
-        });
+        // Fetch stats with time range approximation
+        const timeRangeParam = getTimeRangeString();
+        const statsResponse = await fetch(`${API_BASE_URL}/api/power/stats?timeRange=${timeRangeParam}`);
+        if (!statsResponse.ok) {
+          throw new Error('Failed to fetch stats data');
+        }
+        statsData = await statsResponse.json();
+      } else {
+        // Use default 1h range
+        const timeRangeParam = '1h';
+        
+        // Fetch energy consumption
+        const energyResponse = await fetch(`${API_BASE_URL}/api/power/energy?timeRange=${timeRangeParam}`);
+        if (!energyResponse.ok) {
+          throw new Error('Failed to fetch energy data');
+        }
+        energyData = await energyResponse.json();
+        
+        // Fetch stats
+        const statsResponse = await fetch(`${API_BASE_URL}/api/power/stats?timeRange=${timeRangeParam}`);
+        if (!statsResponse.ok) {
+          throw new Error('Failed to fetch stats data');
+        }
+        statsData = await statsResponse.json();
       }
+      
+      // Fetch latest reading
+      const latestResponse = await fetch(`${API_BASE_URL}/api/power/latest`);
+      if (!latestResponse.ok) {
+        throw new Error('Failed to fetch latest reading');
+      }
+      const latestData: LatestReading = await latestResponse.json();
+      
+      setLatestReading(latestData);
+      
+      setStatistics({
+        avgVoltage: Math.round(statsData.voltage.avg * 100) / 100,
+        minVoltage: Math.round(statsData.voltage.min * 100) / 100,
+        maxVoltage: Math.round(statsData.voltage.max * 100) / 100,
+        avgCharge: Math.round(statsData.charge.avg * 100) / 100,
+        minCharge: Math.round(statsData.charge.min * 100) / 100,
+        maxCharge: Math.round(statsData.charge.max * 100) / 100,
+        totalEnergy: Math.round(energyData.totalEnergyKWh * 1000) / 1000
+      });
       
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }
-  }, [getTimeRangeString]);
+  }, [useCustomRange, startDateTime, endDateTime, getTimeRangeString]);
 
   useEffect(() => {
     // Initial fetch
@@ -249,36 +303,56 @@ function App() {
             </div>
 
             {/* Average Statistics */}
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Average Values for Selected Range</h2>
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Statistics for Selected Range</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {/* Average Voltage */}
+              {/* Voltage Stats */}
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Average Voltage</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.avgVoltage}</p>
-                    <p className="text-sm text-gray-500 mt-1">Volts (V)</p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-lg font-semibold text-gray-700">Voltage Statistics</p>
+                  <div className="bg-blue-100 rounded-full p-2">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Average:</span>
+                    <span className="text-lg font-bold text-gray-800">{statistics.avgVoltage} V</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Min:</span>
+                    <span className="text-md font-semibold text-gray-700">{statistics.minVoltage} V</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Max:</span>
+                    <span className="text-md font-semibold text-gray-700">{statistics.maxVoltage} V</span>
                   </div>
                 </div>
               </div>
 
-              {/* Average Current */}
+              {/* Charge Stats */}
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Average Current</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.avgCurrent}</p>
-                    <p className="text-sm text-gray-500 mt-1">Amperes (A)</p>
-                  </div>
-                  <div className="bg-green-100 rounded-full p-3">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-lg font-semibold text-gray-700">Charge Statistics</p>
+                  <div className="bg-green-100 rounded-full p-2">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                     </svg>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Average:</span>
+                    <span className="text-lg font-bold text-gray-800">{statistics.avgCharge} C</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Min:</span>
+                    <span className="text-md font-semibold text-gray-700">{statistics.minCharge} C</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Max:</span>
+                    <span className="text-md font-semibold text-gray-700">{statistics.maxCharge} C</span>
                   </div>
                 </div>
               </div>
@@ -295,7 +369,7 @@ function App() {
             </div>
 
             {/* Latest Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {/* Voltage Card */}
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
                 <div className="flex items-center justify-between">
@@ -312,33 +386,17 @@ function App() {
                 </div>
               </div>
 
-              {/* Current Card */}
+              {/* Charge Card */}
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Current</p>
-                    <p className="text-3xl font-bold text-gray-800">{latestReading.current}</p>
-                    <p className="text-sm text-gray-500 mt-1">Amperes (A)</p>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Charge (60s)</p>
+                    <p className="text-3xl font-bold text-gray-800">{latestReading.charge}</p>
+                    <p className="text-sm text-gray-500 mt-1">Coulombs (C)</p>
                   </div>
                   <div className="bg-green-100 rounded-full p-3">
                     <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Power Card */}
-              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Power</p>
-                    <p className="text-3xl font-bold text-gray-800">{latestReading.power}</p>
-                    <p className="text-sm text-gray-500 mt-1">Watts (W)</p>
-                  </div>
-                  <div className="bg-purple-100 rounded-full p-3">
-                    <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
                 </div>

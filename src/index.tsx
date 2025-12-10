@@ -1,7 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './index.css';
 import App from './App';
+import Debug from './Debug';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(
@@ -9,7 +11,12 @@ const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <App />
+    <Router basename="/energo-frontend">
+      <Routes>
+        <Route path="/" element={<App />} />
+        <Route path="/debug" element={<Debug />} />
+      </Routes>
+    </Router>
   </React.StrictMode>
 );
 
